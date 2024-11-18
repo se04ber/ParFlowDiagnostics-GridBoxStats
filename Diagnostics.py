@@ -329,5 +329,62 @@ class Diagnostics:  # Make this a subclass of ht.DNDarray?
 
         return(flowleft,flowright,flowfront,flowback,flowbottom,flowtop)
 
+
+#Average data for every (blocksize x blocksize) grid block of 3D/4D-Pfb data, gives out 3D (specfic Tstep if 4D)
+#Output: shape((nt),(nz),new_ny/block_size,nx/block_size)
+#Dimension:
+#make2D=False: 4D/3D/(original z-dim stays same or 
+#make2D=True:  2D array with only layer specified as output
+def gridboxmean(data,varName, block_size=10, Zlayer=-1,make2D=False,Tstep=None, toNetcdf=True):
+    #Read in pfb data if file specified #data = IO.read_pfb(data)
+    #split = self.split 
+    nz, ny, nx = data.shape
+
+    #Throw error if data array is 0- or 1-dimensionl
+    if len(data) < 2:
+        raise ValueError("Data dimensions must larger than 1")
+    #Throw error if block_size does not fit to horizontal data shape
+    if nx % block_size != 0 or ny % block_size != 0:
+        raise ValueError("Data dimensions must be divisible by block_size")
+        
+    #New (x,y) dimensions
+    new_ny = ny // block_size + (1 if ny % block_size else 0)
+    new_nx = nx // block_size + (1 if nx % block_size else 0)
+   
+    #Iterate and average over (block_size)*(block_size)d grid cell blocks
+    if make2D == False:
+        if len(data.shape)==3:
+            newShape = ["nz","new_ny","new_nx"]
+            #downsized_data = ht.zeros(newShape,split=-1)
+            downsized_data = ht.reshape(data, (nz, new_ny, block_size, new_nx, block_size))
+            downsized_data = ht.mean(ht.mean(downsized_data, axis=4), axis=2)
+        if len(data.shape)==4:
+            print("Error, for now use make2D for 4D array")
+
+    #Make 2D cases    
+    else:
+        newShape = ["new_ny","new_nx"]
+        if len(data.shape)==3:
+            data = data[Zlayer,:,:]
+        if len(data.shape)==4:
+            data = data[Tste,Zlayer,:,:]
+        #downsized_data = ht.zeros(newShape,split=-1)
+        downsized_data = ht.reshape(data, (new_ny, block_size, new_nx, block_size))
+        downsize_data = ht.mean(ht.mean(downsized_data, axis=3), axis=1)
+
+    if toNetcdf==True:
+        # Save to netcdf
+        ht.save_netcdf(
+                data = downsized_data,
+                path = str(output_file) + ".nc",
+                variable= varName,
+                mode="w",
+                dimension_names=newShape
+                )
+
+    return downsized_data
+
+
+
 if __name__ == '__main__':
     pass
